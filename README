@@ -1,3 +1,161 @@
+* Qairon & Toolbelt: The Complete Picture
+
+    Qairon and Toolbelt are companion projects that together provide a complete
+    infrastructure operations workflow - from authoritative data to hands-on-keyboard.
+
+    ┌─────────────────────────────────────────────────────────────────────────────┐
+    │                              QAIRON                                         │
+    │                    (Single Source of Truth)                                 │
+    │                                                                             │
+    │   • Relational model of your entire infrastructure topology                 │
+    │   • Applications → Stacks → Services → Deployments                          │
+    │   • Environments → Providers → Regions → Partitions → Targets               │
+    │   • Full artifact provenance (builds → artifacts → releases)                │
+    │   • REST API, CLI (qcli), Python module                                     │
+    └─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      │ qcli deployment_target list
+                                      │ (colon-separated IDs)
+                                      │
+                                      ▼
+              prod:aws:123456789012:us-west-2:vpc0:eks:cluster1
+              dev:gcp:my-project:us-west1:default:gke:dev-cluster
+              staging:azure:a1b2c3d4-...:westus2:vnet0:aks:staging
+                                      │
+                                      │ sed 's/:/\//g'
+                                      │ (transform to paths)
+                                      │
+                                      ▼
+    ┌─────────────────────────────────────────────────────────────────────────────┐
+    │                             TOOLBELT                                        │
+    │                   (Shell Environment Isolation)                             │
+    │                                                                             │
+    │   ~/ops/                                                                    │
+    │   ├── prod/aws/123456789012/us-west-2/vpc0/eks/cluster1/                   │
+    │   ├── dev/gcp/my-project/us-west1/default/gke/dev-cluster/                 │
+    │   └── staging/azure/a1b2c3d4-.../westus2/vnet0/aks/staging/                │
+    │                                                                             │
+    │   • Directory structure mirrors Qairon's topology                           │
+    │   • direnv auto-configures credentials as you navigate                      │
+    │   • Isolated KUBECONFIG, AWS_PROFILE, GOOGLE_CLOUD_PROJECT per target       │
+    │   • Visual prompt shows current context                                     │
+    └─────────────────────────────────────────────────────────────────────────────┘
+
+    THE SYNERGY:
+
+    1. Qairon Knows What Exists
+       Qairon is your infrastructure's relational database. It knows every
+       environment, provider account, region, network, and deployment target.
+       When you add infrastructure, you register it in Qairon. When you
+       decommission, you remove it. Qairon is always the authoritative answer
+       to "what do we have?"
+
+    2. Toolbelt Makes It Navigable
+       Toolbelt transforms Qairon's abstract topology into a physical directory
+       structure you can cd into. Each directory level inherits context from
+       its parents via direnv's source_up mechanism.
+
+    3. Credentials Follow Context
+       As you navigate deeper into the hierarchy, environment variables
+       accumulate. By the time you reach a deployment target, your shell is
+       fully configured:
+
+       cd ~/ops/prod/aws/123456789012/us-west-2/vpc0/eks/main-cluster
+         └─ _env=prod
+              └─ AWS_PROFILE=123456789012_AdminRole
+                   └─ AWS_REGION=us-west-2
+                        └─ _partition=vpc0
+                             └─ KUBECONFIG=~/.kube/.../main-cluster/config
+
+       Now `kubectl get pods` just works - no manual profile switching,
+       no remembering which account you're in, no cross-environment accidents.
+
+    4. Isolation Prevents Mistakes
+       Each deployment target has its own KUBECONFIG, its own database
+       credentials path, its own tool configurations. You cannot accidentally
+       run a production command with dev credentials because the environment
+       variables are set by your physical location in the directory tree.
+
+    5. The Prompt Keeps You Oriented
+       Your shell prompt changes to show where you are:
+
+           123456789012_AdminRole->main-cluster>
+
+       You always know your current context at a glance.
+
+    OPERATIONAL WORKFLOW:
+
+    ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+    │   Qairon    │     │   Toolbelt  │     │   Navigate  │     │   Operate   │
+    │   defines   │ ──► │   creates   │ ──► │   cd into   │ ──► │   kubectl   │
+    │   topology  │     │   dirs      │     │   target    │     │   terraform │
+    └─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+
+    Example session:
+
+        # Sync toolbelt with Qairon (picks up new infrastructure)
+        $ qcli deployment_target list -o plain -f id | sed 's/:/\//g' | \
+            xargs -n 1 mkdir -p
+        $ setup_toolbelt.py ~/ops root
+
+        # Navigate to a production EKS cluster
+        $ cd ~/ops/prod/aws/123456789012/us-west-2/vpc0/eks/main-cluster
+        direnv: loading .envrc
+        123456789012_AdminRole->main-cluster>
+
+        # Your shell is now configured for this exact target
+        $ kubectl get nodes     # uses the right KUBECONFIG
+        $ aws sts get-caller-identity   # uses the right AWS_PROFILE
+
+        # Switch to a different environment - just cd
+        $ cd ~/ops/dev/gcp/my-project/us-west1/default/gke/dev-cluster
+        direnv: loading .envrc
+        my-project_DevConfig->dev-cluster>
+
+        # Now configured for GCP dev environment
+        $ gcloud config list    # shows dev project
+        $ kubectl get pods      # hits the dev cluster
+
+    DEMO:
+
+    Watch a complete walkthrough of toolbelt in action:
+    https://github.com/gnydick/toolbelt/blob/main/demo.cast
+
+    To play the demo locally:
+        asciinema play demo.cast
+
+    The demo shows:
+    - AWS SSO login
+    - Querying Qairon for deployment targets
+    - Creating the directory structure
+    - Running setup_toolbelt.py
+    - Navigating into an AWS account (with profile prompt)
+    - Navigating to an EKS cluster
+    - Environment variables automatically configured
+    - Running kubectl with the correct context
+    - Prompt restoration when leaving the toolbelt
+
+    WHY THIS MATTERS:
+
+    • No Mental Overhead: Stop remembering which profile, which kubeconfig,
+      which project. Your location IS your context.
+
+    • No Cross-Environment Accidents: Can't run prod commands with dev creds
+      because the credentials are physically separated by directory.
+
+    • Team Consistency: Everyone uses the same structure. "cd to the cluster"
+      means the same thing to everyone.
+
+    • Audit Friendly: Shell history shows exactly where commands were run.
+      `cd ~/ops/prod/... && kubectl delete pod` is unambiguous.
+
+    • Qairon Integration: When Qairon's topology changes, regenerate your
+      toolbelt. New accounts, new regions, new clusters - all automatically
+      get their isolated credential spaces.
+
+
+* Prerequisites
+
 * Must have qcli installed and working
 
 * Must have direnv installed
