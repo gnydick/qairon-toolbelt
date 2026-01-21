@@ -1,0 +1,72 @@
+* Must have qcli installed and working
+
+* Must have direnv installed
+
+    # Add these lines to $HOME/.bashrc in order to activate `direnv`, and activate custom prompt processing
+
+    PROMPT_COMMAND='PS1="\[$(ppwd)\]\u@\h:\w> ";PS1=${CUSTOM_PS1:-$PS1}'
+
+    if ! [[ "${PROMPT_COMMAND:-}" =~ _direnv_hook ]]; then
+      PROMPT_COMMAND="_direnv_hook${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+    fi
+
+
+
+* Toolbelt Installation
+
+1. create your toolbelt
+
+    mkdir $HOME/ops
+
+2. create all of the directories for all of our infra
+
+    # qcli can be queried to fetch subsets of infra, it is not necessary to grab all of it at once
+
+    qcli deployment_target list  -o plain -f id | sed 's/:/\//g' | xargs -n 1 mkdir -p
+
+3. configure your toolbelt with the default config skeleton
+
+    # must be in the withme-ops/nextgen/toolbelt directory
+    # this will reconfigure the entire toolbelt, any customizations will be lost
+    ./apply_skel.py ~/ops root
+
+
+
+* Sub-directory Maintenance
+
+    # must be in the withme-ops/nextgen/toolbelt directory
+    # to reconfigure a subdirectory of the toolbelt
+    # levels:  ['root', 'environment', 'provider', 'id', 'region', 'partition', 'dep_target_type', 'dep_target']
+
+    ./apply_skel.py ~/ops/<path>  <level>
+
+    Example, recursively reconfigure a specific AWS account and everything below it
+    ./apply_skel.py ~/ops/<environment>/<provider>/<id> id
+
+    ./apply_skel.py ~/ops/dev/aws/702861675511  id
+        - dev environment
+        - aws provider
+        - aws account id 702861675511
+
+
+     Example, recursively reconfigure a specific AWS vpc and everything below it
+        ./apply_skel.py ~/ops/<environment>/<provider>/<id>/<region>/<partition> <level>
+
+        ./apply_skel.py ~/ops/dev/aws/702861675511/us-west-2/vpc0  partition
+        - dev environment
+        - aws provider
+        - aws account id 702861675511
+        - aws region us-west-2
+        - aws vpc vpc0
+
+     Example, recursively reconfigure all eks in a partition
+        ./apply_skel.py ~/ops/<environment>/<provider>/<id>/<region>/<partition>/<dep_target_type> <level>
+
+        ./apply_skel.py ~/ops/dev/aws/702861675511/us-west-2/vpc0/eks  dep_target_type
+        - dev environment
+        - aws provider
+        - aws account id 702861675511
+        - aws region us-west-2
+        - aws vpc vpc0
+        - aws eks clusters in vpc0
+
