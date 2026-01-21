@@ -48,7 +48,7 @@ class ToolbeltTopologyLevel(Enum):
                 provider_path = os.path.dirname(provider_path)
             provider = os.path.basename(provider_path)
 
-            source = os.path.join(base_path, 'provider', provider, target_type, '.envrc')
+            source = os.path.join(base_path, 'provider_svcs', provider, target_type, '.envrc')
         else:
             source = os.path.join(base_path, self.path)
 

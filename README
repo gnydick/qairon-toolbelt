@@ -4,11 +4,15 @@
 
     # Add these lines to $HOME/.bashrc in order to activate `direnv`, and activate custom prompt processing
 
-    PROMPT_COMMAND='PS1="\[$(ppwd)\]\u@\h:\w> ";PS1=${CUSTOM_PS1:-$PS1}'
-
+    # Hook direnv into your shell (adds _direnv_hook to PROMPT_COMMAND)
     if ! [[ "${PROMPT_COMMAND:-}" =~ _direnv_hook ]]; then
       PROMPT_COMMAND="_direnv_hook${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
     fi
+
+    # Enable CUSTOM_PS1 support (required for toolbelt prompts to work)
+    # This sets a default prompt, then overrides with CUSTOM_PS1 if set
+    # Change the default (\u@\h:\w\$) to your preferred prompt
+    PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}"'PS1="${CUSTOM_PS1:-\u@\h:\w\$ }"'
 
 
 
@@ -25,47 +29,93 @@
     qcli deployment_target list  -o plain -f id | sed 's/:/\//g' | xargs -n 1 mkdir -p
 
 3. configure your toolbelt with the default config skeleton
-
-    # must be in the withme-ops/nextgen/toolbelt directory
     # this will reconfigure the entire toolbelt, any customizations will be lost
-    ./apply_skel.py ~/ops root
 
+    <path to toolbelt>/setup_toolbelt.py ~/ops root
+
+
+
+* Topology Hierarchy
+
+    Toolbelt uses an 8-level hierarchy that abstracts consistently across cloud providers:
+
+    Level   Name                    AWS                 Azure               GCP
+    ─────────────────────────────────────────────────────────────────────────────────────
+    1       ROOT                    ops/                ops/                ops/
+    2       ENVIRONMENT             dev, staging, prod  dev, staging, prod  dev, staging, prod
+    3       PROVIDER                aws                 azure               gcp
+    4       ID                      Account ID          Subscription ID     Project ID
+    5       REGION                  us-west-2           westus2             us-west1
+    6       PARTITION               VPC                 VNet                VPC*
+    7       DEPLOYMENT_TARGET_TYPE  eks, rds-mysql      aks, azure-postgres gke, cloudsql-mysql
+    8       DEPLOYMENT_TARGET       cluster-name        cluster-name        cluster-name
+
+    * GCP VPCs are global (not regional), but the partition level still works because
+      deployments (GKE, Cloud SQL, etc.) ARE regional. The VPC serves as a logical
+      network boundary rather than a strict hierarchical container.
+
+    Intentionally Omitted (consistent across providers):
+    - Availability Zones (AWS, Azure, GCP all have them - none are modeled)
+    - Organization hierarchies (AWS Org/OU, GCP Org/Folders, Azure Management Groups)
+
+    This models the *operational* hierarchy - where you deploy and manage resources -
+    not the complete cloud resource hierarchy.
+
+
+* Provider-Specific Environment Variables
+
+    Each provider uses different environment variable names. Toolbelt sets the correct
+    ones automatically based on which provider directory you're in:
+
+    Concept         AWS                         GCP                             Azure
+    ─────────────────────────────────────────────────────────────────────────────────────────────
+    ID              AWS_ACCOUNT                 GOOGLE_CLOUD_PROJECT            AZURE_SUBSCRIPTION_ID
+    Region          AWS_REGION                  CLOUDSDK_COMPUTE_REGION         AZURE_DEFAULTS_LOCATION
+    Profile/Config  AWS_PROFILE                 CLOUDSDK_ACTIVE_CONFIG_NAME     (not applicable)
+
+    Profile Behavior:
+    - AWS and GCP: First time you cd into an ID directory, you'll be prompted for a
+      profile/config name. This is stored in ~/.toolbelt/<path>/.env and reused.
+    - Azure: No profile prompt. Azure uses your authenticated identity with RBAC roles.
+      Elevate permissions via Azure PIM in the portal when needed.
+
+    To reset a stored profile and be prompted again:
+        rm ~/.toolbelt/<env>/<provider>/<id>/.env
 
 
 * Sub-directory Maintenance
 
-    # must be in the withme-ops/nextgen/toolbelt directory
     # to reconfigure a subdirectory of the toolbelt
     # levels:  ['root', 'environment', 'provider', 'id', 'region', 'partition', 'dep_target_type', 'dep_target']
 
-    ./apply_skel.py ~/ops/<path>  <level>
+    ./setup_toolbelt.py ~/ops/<path>  <level>
 
     Example, recursively reconfigure a specific AWS account and everything below it
-    ./apply_skel.py ~/ops/<environment>/<provider>/<id> id
+    ./setup_toolbelt.py ~/ops/<environment>/<provider>/<id> id
 
-    ./apply_skel.py ~/ops/dev/aws/702861675511  id
+    ./setup_toolbelt.py ~/ops/dev/aws/777777777777  id
         - dev environment
         - aws provider
-        - aws account id 702861675511
+        - aws account id 777777777777
 
 
      Example, recursively reconfigure a specific AWS vpc and everything below it
-        ./apply_skel.py ~/ops/<environment>/<provider>/<id>/<region>/<partition> <level>
+        ./setup_toolbelt.py ~/ops/<environment>/<provider>/<id>/<region>/<partition> <level>
 
-        ./apply_skel.py ~/ops/dev/aws/702861675511/us-west-2/vpc0  partition
+        ./setup_toolbelt.py ~/ops/dev/aws/777777777777/us-west-2/vpc0  partition
         - dev environment
         - aws provider
-        - aws account id 702861675511
+        - aws account id 777777777777
         - aws region us-west-2
         - aws vpc vpc0
 
      Example, recursively reconfigure all eks in a partition
-        ./apply_skel.py ~/ops/<environment>/<provider>/<id>/<region>/<partition>/<dep_target_type> <level>
+        ./setup_toolbelt.py ~/ops/<environment>/<provider>/<id>/<region>/<partition>/<dep_target_type> <level>
 
-        ./apply_skel.py ~/ops/dev/aws/702861675511/us-west-2/vpc0/eks  dep_target_type
+        ./setup_toolbelt.py ~/ops/dev/aws/777777777777/us-west-2/vpc0/eks  dep_target_type
         - dev environment
         - aws provider
-        - aws account id 702861675511
+        - aws account id 777777777777
         - aws region us-west-2
         - aws vpc vpc0
         - aws eks clusters in vpc0
