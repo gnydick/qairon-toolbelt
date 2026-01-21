@@ -5,14 +5,20 @@
     # Add these lines to $HOME/.bashrc in order to activate `direnv`, and activate custom prompt processing
 
     # Hook direnv into your shell (adds _direnv_hook to PROMPT_COMMAND)
-    if ! [[ "${PROMPT_COMMAND:-}" =~ _direnv_hook ]]; then
-      PROMPT_COMMAND="_direnv_hook${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+    if [[ ";${PROMPT_COMMAND[*]:-};" != *";_direnv_hook;"* ]]; then
+      if [[ "$(declare -p PROMPT_COMMAND 2>&1)" == "declare -a"* ]]; then
+        PROMPT_COMMAND=(_direnv_hook "${PROMPT_COMMAND[@]}")
+      else
+        PROMPT_COMMAND="_direnv_hook${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+      fi
     fi
 
     # Enable CUSTOM_PS1 support (required for toolbelt prompts to work)
-    # This sets a default prompt, then overrides with CUSTOM_PS1 if set
-    # Change the default (\u@\h:\w\$) to your preferred prompt
-    PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}"'PS1="${CUSTOM_PS1:-\u@\h:\w\$ }"'
+    # IMPORTANT: This line MUST be at the END of your .bashrc, after all other
+    # PROMPT_COMMAND modifications (direnv, pyenv, etc.) to avoid syntax errors.
+    # This sets a default prompt, then overrides with CUSTOM_PS1 if set.
+    # Change the default (\u@\h:\w\$) to your preferred prompt.
+    PROMPT_COMMAND="${PROMPT_COMMAND:+${PROMPT_COMMAND%;}; }"'PS1="${CUSTOM_PS1:-\u@\h:\w\$ }"'
 
 
 
